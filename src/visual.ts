@@ -25,8 +25,6 @@
 */
 "use strict";
 
-import 'regenerator-runtime/runtime';
-
 type Selection<T1, T2 = T1> = d3.Selection<any, T1, any, T2>;
 import { base64conversion } from './base64conversion';
 import { PDFViewSettings, FormatConfiguration } from './formattingmodel';
@@ -41,10 +39,12 @@ import {
   evaluateArrowButtons,
 } from './layout';
 import "./../style/visual.less";
-import * as pdfjsLib from 'pdfjs-dist/build/pdf';
-import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.entry';
-import { PDFDocumentLoadingTask, RenderTask } from 'pdfjs-dist/types/src/display/api';
-import { PDFPageProxy } from 'pdfjs-dist';
+
+import 'regenerator-runtime/runtime';
+
+import { PDFDocumentLoadingTask, RenderTask, PDFPageProxy } from 'pdfjs-dist';
+import * as pdfjsLib from 'pdfjs-dist';
+
 import powerbi from "powerbi-visuals-api";
 import {createTooltipServiceWrapper, ITooltipServiceWrapper} from "powerbi-visuals-utils-tooltiputils";
 import VisualConstructorOptions = powerbi.extensibility.visual.VisualConstructorOptions;
@@ -54,11 +54,11 @@ import IVisualHost =  powerbi.extensibility.visual.IVisualHost;
 import IVisualEventService = powerbi.extensibility.IVisualEventService;
 import IVisualLicenseManager = powerbi.extensibility.IVisualLicenseManager;
 import LicenseInfoResult =  powerbi.extensibility.visual.LicenseInfoResult;
+import ServicePlan =  powerbi.extensibility.visual.ServicePlan;
 import ISelectionManager = powerbi.extensibility.ISelectionManager;
 import {
   select as d3Select
 } from "d3-selection";
-import * as crypto from 'crypto';
 
 const defaultSettings: PDFViewSettings = {
   pdfViewerSettings: {
@@ -112,7 +112,6 @@ export class Visual implements IVisual {
     
     public licenseManager: IVisualLicenseManager;
     public notificationType: number;
-    public hasServicePlans: boolean;
     public isLicensed: boolean = false;
 
     private events: IVisualEventService;
@@ -121,41 +120,44 @@ export class Visual implements IVisual {
     public landingDivElement: HTMLDivElement;
     public landingImage: HTMLImageElement;
     private isLandingPageOn: boolean;
+
+    private currentUserValidPlans: ServicePlan[] | undefined;
+    private hasServicePlans: boolean | undefined;
+    private isLicenseUnsupportedEnv: boolean | undefined;
     
     public static readonly SCROLLBAR_WIDTH = 18; // Fixed number for scroll bar width
        
     constructor(options: VisualConstructorOptions) {
+      
       this.licenseManager = options.host.licenseManager;
-
-      const planName = "pdfviewer_plan";
     
       this.licenseManager.getAvailableServicePlans()
-        .then((result: LicenseInfoResult) => {
-          this.notificationType = result.isLicenseUnsupportedEnv
-            ? powerbi.LicenseNotificationType.UnsupportedEnv
-            : powerbi.LicenseNotificationType.General;
-          
-          this.hasServicePlans = !!(
-            result.plans &&
-            result.plans.length &&
-            keywordExistsInString(planName, result.plans[0].spIdentifier) &&
-            (result.plans[0].state === powerbi.ServicePlanState.Active || result.plans[0].state === powerbi.ServicePlanState.Warning)
-          );
-    
-          if (!this.hasServicePlans) {
-            this.isLicensed = false;
-          } else { 
-            this.isLicensed = true;
-          }
-        })
-        .catch((err) => {
-          this.hasServicePlans = undefined;
-          console.log(err);
-        });
- 
+
+          .then(({ plans, isLicenseUnsupportedEnv, isLicenseInfoAvailable }: LicenseInfoResult) => {
+
+              if (isLicenseInfoAvailable && !isLicenseUnsupportedEnv) {
+                  this.currentUserValidPlans = plans?.filter(({ state }) =>
+                      (state === powerbi.ServicePlanState.Active || state === powerbi.ServicePlanState.Warning)
+                  );
+                  this.hasServicePlans = !! this.currentUserValidPlans?.length;
+              }
+              this.isLicenseUnsupportedEnv = isLicenseUnsupportedEnv;
+
+              if (!this.hasServicePlans) {
+                  this.isLicensed = false;
+              } else { 
+                  this.isLicensed = true;
+              }
+
+          }).catch((err) => {
+              this.currentUserValidPlans = undefined;
+              this.hasServicePlans = undefined;
+              console.log(err);
+          });
+
       this.selectionManager = options.host.createSelectionManager();
-    
-      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+      
+      pdfjsLib.GlobalWorkerOptions.workerSrc = 'assets/pdf.worker.min.js';
     
       this.target = options.element;
       this.host = options.host;
@@ -449,20 +451,12 @@ export class Visual implements IVisual {
     
 }
 
-function keywordExistsInString(keyword: string, str: string): boolean {
-  return str.includes(keyword);
-}
-
 function generateGUID(): string {
-  const bytes = crypto.randomBytes(16);
-  bytes[6] = (bytes[6] & 0x0f) | 0x40; // Set version to 4
-  bytes[8] = (bytes[8] & 0x3f) | 0x80; // Set variant to RFC4122
-
-  return bytes.toString('hex').substring(0, 8) +
-         '-' + bytes.toString('hex').substring(8, 12) +
-         '-4' + bytes.toString('hex').substring(13, 16) +
-         '-' + bytes.toString('hex').substring(16, 20) +
-         '-' + bytes.toString('hex').substring(20);
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+  });
 }
 
 function findIndexInColumns(columns: powerbi.DataViewMetadataColumn[], columnName: string ) {

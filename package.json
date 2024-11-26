@@ -1,40 +1,49 @@
 {
-  "name": "visual",
-  "description": "default_template_value",
-  "repository": {
-    "type": "default_template_value",
-    "url": "default_template_value"
-  },
-  "license": "MIT",
-  "scripts": {
-    "pbiviz": "pbiviz",
-    "start": "pbiviz start",
-    "package": "pbiviz package",
-    "lint": "tslint -c tslint.json -p tsconfig.json",
-    "eslint": "npx eslint . --ext .js,.jsx,.ts,.tsx"
-  },
   "dependencies": {
-    "@babel/runtime": "7.6.0",
-    "@types/d3": "5.7.2",
-    "@types/pdfjs-dist": "2.10.378",
-    "@typescript-eslint/eslint-plugin": "^6.2.0",
-    "@typescript-eslint/parser": "^6.2.0",
+    "@types/d3": "^7.4.0",
+    "@types/pdfjs-dist": "^2.10.378",
+    "crypto-browserify": "^3.12.1",
     "d3": "^7.8.5",
-    "eslint-plugin-powerbi-visuals": "^0.8.1",
-    "pdfjs-dist": "^3.7.107",
-    "powerbi-visuals-api": "5.1.0",
-    "powerbi-visuals-utils-formattingmodel": "5.0.0",
-    "powerbi-visuals-utils-tooltiputils": "^6.0.1",
-    "process": "^0.11.10",
-    "webpack": "^5.0.0",
-    "worker-loader": "3.0.7"
+    "pdfjs-dist": "^4.8.69",
+    "powerbi-visuals-api": "~5.10.0",
+    "powerbi-visuals-utils-formattingmodel": "^6.0.4",
+    "powerbi-visuals-utils-tooltiputils": "^6.0.4",
+    "regenerator-runtime": "^0.14.0"
   },
   "devDependencies": {
-    "@types/node": "^20.2.5",
+    "@babel/core": "^7.26.0",
+    "@babel/preset-env": "^7.26.0",
+    "@babel/preset-react": "^7.25.9",
+    "@babel/runtime": "^7.26.0",
+    "@babel/runtime-corejs3": "^7.26.0",
+    "@types/node": "^18.16.0",
+    "@typescript-eslint/eslint-plugin": "^6.2.0",
+    "@typescript-eslint/parser": "^6.2.0",
+    "babel-loader": "^9.2.1",
+    "buffer": "^6.0.3",
+    "copy-webpack-plugin": "^11.0.0",
+    "css-loader": "^7.1.2",
     "eslint": "^8.46.0",
-    "ts-loader": "6.1.0",
-    "tslint": "^5.18.0",
-    "tslint-microsoft-contrib": "^6.2.0",
-    "typescript": "3.6.3"
+    "eslint-plugin-powerbi-visuals": "^0.8.1",
+    "extra-watch-webpack-plugin": "^1.0.3",
+    "json-loader": "^0.5.7",
+    "less": "^4.2.0",
+    "less-loader": "^12.2.0",
+    "mini-css-extract-plugin": "^2.9.2",
+    "powerbi-visuals-webpack-plugin": "^4.1.0",
+    "process": "^0.11.10",
+    "stream-browserify": "^3.0.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^4.9.5",
+    "webpack": "^5.96.1",
+    "webpack-bundle-analyzer": "^4.10.2",
+    "webpack-cli": "^5.1.4",
+    "webpack-dev-server": "^5.1.0"
+  },
+  "scripts": {
+    "cert": "pbiviz --install-cert",
+    "package": "webpack",
+    "start": "webpack serve",
+    "eslint": "npx eslint ."
   }
 }
