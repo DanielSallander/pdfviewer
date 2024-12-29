@@ -2,7 +2,6 @@
   "dependencies": {
     "@types/d3": "^7.4.0",
     "@types/pdfjs-dist": "^2.10.378",
-    "crypto-browserify": "^3.12.1",
     "d3": "^7.8.5",
     "pdfjs-dist": "^4.8.69",
     "powerbi-visuals-api": "~5.10.0",
@@ -22,28 +21,30 @@
     "babel-loader": "^9.2.1",
     "buffer": "^6.0.3",
     "copy-webpack-plugin": "^11.0.0",
+    "crypto-browserify": "^3.12.1",
     "css-loader": "^7.1.2",
     "eslint": "^8.46.0",
     "eslint-plugin-powerbi-visuals": "^0.8.1",
     "extra-watch-webpack-plugin": "^1.0.3",
     "json-loader": "^0.5.7",
-    "less": "^4.2.0",
+    "less": "^4.2.1",
     "less-loader": "^12.2.0",
     "mini-css-extract-plugin": "^2.9.2",
+    "powerbi-visuals-tools": "^5.6.0",
     "powerbi-visuals-webpack-plugin": "^4.1.0",
     "process": "^0.11.10",
     "stream-browserify": "^3.0.0",
     "ts-loader": "^9.5.1",
     "typescript": "^4.9.5",
-    "webpack": "^5.96.1",
+    "webpack": "^5.97.1",
     "webpack-bundle-analyzer": "^4.10.2",
     "webpack-cli": "^5.1.4",
-    "webpack-dev-server": "^5.1.0"
+    "webpack-dev-server": "^5.2.0"
   },
   "scripts": {
     "cert": "pbiviz --install-cert",
     "package": "webpack",
-    "start": "webpack serve",
-    "eslint": "npx eslint ."
+    "eslint": "npx eslint .",
+    "start": "webpack serve"
   }
 }

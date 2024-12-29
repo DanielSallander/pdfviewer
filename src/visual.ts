@@ -44,6 +44,8 @@ import 'regenerator-runtime/runtime';
 
 import { PDFDocumentLoadingTask, RenderTask, PDFPageProxy } from 'pdfjs-dist';
 import * as pdfjsLib from 'pdfjs-dist';
+import { WorkerMessageHandler }  from 'pdfjs-dist/build/pdf.worker.mjs';
+const _ensureWorker = WorkerMessageHandler; /* tree shaking for webpack */
 
 import powerbi from "powerbi-visuals-api";
 import {createTooltipServiceWrapper, ITooltipServiceWrapper} from "powerbi-visuals-utils-tooltiputils";
@@ -130,7 +132,7 @@ export class Visual implements IVisual {
     constructor(options: VisualConstructorOptions) {
       
       this.licenseManager = options.host.licenseManager;
-    
+      
       this.licenseManager.getAvailableServicePlans()
 
           .then(({ plans, isLicenseUnsupportedEnv, isLicenseInfoAvailable }: LicenseInfoResult) => {
@@ -154,11 +156,17 @@ export class Visual implements IVisual {
               this.hasServicePlans = undefined;
               console.log(err);
           });
-
+      
       this.selectionManager = options.host.createSelectionManager();
       
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'assets/pdf.worker.min.js';
-    
+      try {
+          pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.mjs'; 
+          console.log('Worker successfully set');
+      } catch (workerError) {
+          console.error('Error setting worker:', workerError);
+          console.error('GlobalWorkerOptions:', pdfjsLib.GlobalWorkerOptions);
+      }
+      
       this.target = options.element;
       this.host = options.host;
       this.self = this;
@@ -177,24 +185,25 @@ export class Visual implements IVisual {
       this.selectionElement = d3Select(this.canvas);
 
       this.tooltipServiceWrapper = createTooltipServiceWrapper(this.host.tooltipService);
-
+      
       this.handleContextMenu();
     
       options.host.refreshHostData();
+      
     }
 
     public update(options: VisualUpdateOptions) {
-           
+      
       this.events.renderingStarted(options);
 
       this.options = options;
 
       this.warningDiv.hidden = true;
-
+      
       this.HandleLandingPage(options);
       
       if(!this.isLandingPageOn) this.renderPdf(options);
-
+      
       this.events.renderingFinished(options);
     
       return;
@@ -218,9 +227,7 @@ export class Visual implements IVisual {
               this.headerContainer.style.display = ''
           }
       }
-
       this.adjustLandingSize();
-
     }
 
     private renderPdf(options: VisualUpdateOptions) {
@@ -228,7 +235,7 @@ export class Visual implements IVisual {
       const { dataViews } = options;
       const { objects } = dataViews[0].metadata;
       const { rows, columns } = dataViews[0].table;
-    
+      
       this.visualViewportWidth = options.viewport.width;
       this.visualViewportHeight = options.viewport.height;
     
@@ -240,7 +247,6 @@ export class Visual implements IVisual {
         }
       };
       
-      
       this.pdfViewSettings = pdfViewSettings;
     
       const Base64Conversion = new base64conversion();
@@ -248,7 +254,7 @@ export class Visual implements IVisual {
       const pdfDataIndex = findIndexInColumns(columns, "pdfData");
       const pdfFileNameIndex = findIndexInColumns(columns, "pdfFileName");
       const pdfTooltipIndex = findIndexInColumns(columns, "tooltipData");
-
+      
       /* Only one document must be selected */
       if (!rows || rows.length !== 1) {
         this.showWarning("The visual must be filtered to one document in order to be displayed");
@@ -259,18 +265,18 @@ export class Visual implements IVisual {
       this.pdfFileName = rows[0][pdfFileNameIndex]?.toString() || generateGUID();  
       
       const newBase64String = rows[0][pdfDataIndex]?.toString();
-  
+      
       if (!newBase64String || !Base64Conversion.isBase64(newBase64String)) {
         this.showWarning(
           (!newBase64String ? "No pdf document is selected or pdf base 64 data is empty" :
           "The selected pdf document is not properly formatted to base64"));
         return;
       }
-
+      
       const pdfDataIsMeasure = dataViews[0].metadata.columns[pdfDataIndex].isMeasure;
       const pdfFileNameIsMeasure = dataViews[0]?.metadata?.columns[pdfFileNameIndex]?.isMeasure ?? false;
       const pdfTooltipIsMeasure = dataViews[0]?.metadata?.columns[pdfTooltipIndex]?.isMeasure ?? false;
-  
+      
       if (!this.isLicensed) {
         if (pdfDataIsMeasure || pdfFileNameIsMeasure || pdfTooltipIsMeasure) {
           const licenseTooltip = "Using measures is only available in the licensed version"
@@ -286,12 +292,23 @@ export class Visual implements IVisual {
       this.warningText.textContent = '';
       if (this.base64encodedString !== newBase64String) this.pageNumber = 1;
   
-      this.base64encodedString = newBase64String;  
-      const pdfAsArray = Base64Conversion.convertDataURIToBinary(this.base64encodedString);
-  
-      this.loadingTask = pdfjsLib.getDocument({ data: pdfAsArray });
-      this.processLoadingTask();
+      this.base64encodedString = newBase64String;
       
+      const pdfAsArray = Base64Conversion.convertDataURIToBinary(this.base64encodedString);
+      
+      try {
+        this.loadingTask = pdfjsLib.getDocument({
+          data: pdfAsArray,
+          useWorkerFetch: true,
+          isEvalSupported: false,
+          useSystemFonts: true
+        }); 
+          this.processLoadingTask();
+      } catch (error) {
+          console.error('Error loading PDF:', error);
+          this.showWarning('Failed to load PDF document');
+      }
+   
       if (pdfTooltipIndex) {
         this.tooltipServiceWrapper.addTooltip(this.selectionElement,
           () =>
@@ -301,15 +318,14 @@ export class Visual implements IVisual {
           }]
         );
       }
-
+      
       this.selectionElement.on("mouseover.tooltip", () => {
         if (!pdfTooltipIndex) { 
           this.tooltipServiceWrapper.hide()
         }
       })        
     }
-
-    
+ 
     private showWarning(errorMessage: string) {
       this.warningDiv.hidden = false;
       this.base64encodedString = "(dummy)";
@@ -341,7 +357,6 @@ export class Visual implements IVisual {
         });
     }
     
-
     private processPage(page: PDFPageProxy) {
  
       const scale: number = 3;
@@ -376,7 +391,6 @@ export class Visual implements IVisual {
       this.processRenderTask();
     }
     
-
     private processRenderTask() {
       this.renderTask.promise
         .then(() => {
@@ -391,11 +405,15 @@ export class Visual implements IVisual {
           this.adjustSizeAndToggle();
         })
         .catch((renderError) => {
-          console.error('Error occurred during rendering:', renderError);
+          if(renderError.name == 'RenderingCancelledException') {
+            console.log('Rendering cancelled');
+          }
+          else {
+            console.error('Error occurred during rendering:', renderError);
+          }
         });
     }
     
-
     private adjustSizeAndToggle() {
       let bottommostPoint = 0;
       let topmostPoint = 0;

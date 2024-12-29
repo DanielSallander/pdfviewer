@@ -1,18 +1,26 @@
 const path = require("path");
+
+// webpack
 const webpack = require("webpack");
 const { PowerBICustomVisualsWebpackPlugin, LocalizationLoader } = require('powerbi-visuals-webpack-plugin');
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer');
 const ExtraWatchWebpackPlugin = require("extra-watch-webpack-plugin");
+const TerserPlugin = require('terser-webpack-plugin');
+
+// api configuration
 const powerbiApi = require("powerbi-visuals-api");
 
+// visual configuration json path
 const pbivizPath = "./pbiviz.json";
-const pbivizFile = require("./pbiviz.json");
-const capabilitiesPath = "./capabilities.json";
-const capabilities = require("./capabilities.json");
+const pbivizFile = require('./pbiviz.json');
 
-const pluginLocation = "./.tmp/precompile/visualPlugin.ts";
-const visualSourceLocation = "../../src/visual";
+// the visual capabilities content
+const capabilitiesPath = './capabilities.json';
+const capabilities = require('./capabilities.json');
+
+const pluginLocation = "./.tmp/precompile/visualPlugin.ts"; // Path to visual plugin file
+const visualSourceLocation = "../../src/visual"; // Path used inside generated plugin
 const statsLocation = "../../webpack.statistics.html";
 
 const babelOptions = {
@@ -38,22 +46,73 @@ const isProduction = true;
 
 module.exports = {
     entry: {
-        "visual.js": pluginLocation,
-        "pdf.worker.min.js": "pdfjs-dist/build/pdf.worker.mjs"
+        "visual.js": pluginLocation
     },
     target: "web",
     devtool: "source-map",
     mode: isProduction ? "production" : "development",
     optimization: {
         minimize: isProduction,
+        minimizer: [
+            new TerserPlugin({
+                terserOptions: {
+                    compress: {
+                        drop_console: false,
+                        drop_debugger: false
+                    },
+                    output: {
+                        comments: false,
+                    },
+                },
+                extractComments: false,
+            }),
+        ],
+        splitChunks: {
+            chunks: 'async',
+            minSize: 20000,
+            minRemainingSize: 0,
+            minChunks: 1,
+            maxAsyncRequests: 30,
+            maxInitialRequests: 30,
+            enforceSizeThreshold: 50000,
+            cacheGroups: {
+                defaultVendors: {
+                    test: /[\\/]node_modules[\\/]/,
+                    priority: -10,
+                    reuseExistingChunk: true,
+                },
+                pdfjs: {
+                    test: /[\\/]node_modules[\\/]pdfjs-dist[\\/]/,
+                    name: 'pdfjs',
+                    chunks: 'async',
+                    priority: 20,
+                    enforce: true,
+                },
+                default: {
+                    minChunks: 2,
+                    priority: -20,
+                    reuseExistingChunk: true,
+                },
+            },
+        },
     },
     performance: {
-        maxEntrypointSize: 2000000, // Increase to 2MB
-        maxAssetSize: 2000000,      // Increase to 2MB
-        hints: false                 // Or set to 'warning' or 'error' as needed
+        maxEntrypointSize: 3072000,
+        maxAssetSize: 3072000,
+        hints: 'warning'
     },
     module: {
         rules: [
+            {
+                test: /\.m?js$/,
+                exclude: /node_modules/,
+                use: {
+                    loader: 'babel-loader',
+                    options: {
+                        presets: ['@babel/preset-env']
+                    }
+                }
+            },
             {
                 test: /\.tsx?$/,
                 exclude: /node_modules/,
@@ -73,14 +132,28 @@ module.exports = {
                 ],
             },
             {
-                test: /\.m?js$/,
-                resolve: {
-                    fullySpecified: false
+                test: /pdf\.worker\.mjs$/,
+                type: 'asset/resource',
+                generator: {
+                    filename: 'pdf.worker.js'
                 }
             },
             {
-                test: /\.js$/,
-                exclude: /node_modules\/(?!(pdfjs-dist)\/).*/,
+                test: /\.mjs$/,
+                include: /node_modules/,
+                type: 'javascript/auto',
+                resolve: {
+                    fullySpecified: false
+                },
+                use: [
+                    {
+                        loader: require.resolve('babel-loader'),
+                        options: babelOptions
+                    }
+                ]
+            },
+            {
+                test: /(\.js)x|\.js$/,
                 use: [
                     {
                         loader: require.resolve('babel-loader'),
@@ -116,35 +189,33 @@ module.exports = {
                 test: /\.(woff|ttf|ico|woff2|jpg|jpeg|png|webp|gif|svg|eot)$/i,
                 type: 'asset/inline'
             },
-            { 
+            {
                 test: /powerbiGlobalizeLocales\.js$/,
                 loader: LocalizationLoader
             }
-        ],
+        ]
     },
     externals: { "powerbi-visuals-api": "null" },
     resolve: {
-        extensions: [".tsx", ".ts", ".jsx", ".js", ".css", ".mjs"],
+        extensions: [".tsx", ".ts", ".jsx", ".js", ".mjs", ".css"],
         fallback: {
-            "crypto": require.resolve("crypto-browserify"),
-            "stream": require.resolve("stream-browserify"),
-            "buffer": require.resolve("buffer/"),
-            "process": false,
             "path": false,
-            "fs": false,
-            "util": false
-        },
-        alias: {
-            'process/browser': require.resolve('process/browser.js')
+            "stream": require.resolve("stream-browserify"),
+            "crypto": require.resolve("crypto-browserify"),
+            "buffer": require.resolve("buffer/"),
+            "process": require.resolve("process"),
+            "fs": false
         }
     },
     output: {
         clean: true,
         path: path.join(__dirname, ".tmp", "drop"),
-        publicPath: 'assets/',
+        publicPath: '/assets/',
         filename: "[name]",
+        chunkFilename: '[name].[chunkhash].js',
         library: pbivizFile.visual.guid,
         libraryTarget: "var",
+        globalObject: 'this'
     },
     devServer: {
         static: {
@@ -153,7 +224,7 @@ module.exports = {
         },
         compress: true,
         port: 8080,
-        hot: false,
+        hot: false, // Already disabled
         server: {
             type: "https",
             options: {}
@@ -161,26 +232,29 @@ module.exports = {
         headers: {
             "access-control-allow-origin": "*",
             "cache-control": "public, max-age=0",
-        }
+            "Content-Security-Policy": "default-src https: http: data: blob: 'unsafe-inline' 'unsafe-eval' ws: wss:;",
+            "Access-Control-Allow-Headers": "Origin, X-Requested-With, Content-Type, Accept, Authorization",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+            "Access-Control-Allow-Credentials": "true"
+        },
+        allowedHosts: ['app.powerbi.com', 'localhost'],
+        client: false, // Completely disable the client overlay and WebSocket connection
+        webSocketServer: false // Explicitly disable WebSocket server
     },
     plugins: [
-        new webpack.ProvidePlugin({
-            process: require.resolve('process/browser.js'),
-            Buffer: ['buffer', 'Buffer']
-        }),
-        new webpack.DefinePlugin({
-            'process.env': {
-                NODE_ENV: JSON.stringify(isProduction ? 'production' : 'development')
-            }
-        }),
         new MiniCssExtractPlugin({
             filename: "visual.css",
             chunkFilename: "[id].css"
         }),
+        new webpack.ProvidePlugin({
+            Buffer: ['buffer', 'Buffer'],
+            process: 'process',
+        }),
         new BundleAnalyzerPlugin({
             reportFilename: statsLocation,
             openAnalyzer: false,
-            analyzerMode: `static`
+            analyzerMode: 'disabled',
+            generateStatsFile: false
         }),
         new PowerBICustomVisualsWebpackPlugin({
             ...pbivizFile,
@@ -190,8 +264,8 @@ module.exports = {
             apiVersion: powerbiApi.version,
             capabilitiesSchema: powerbiApi.schemas.capabilities,
             dependenciesSchema: powerbiApi.schemas.dependencies,
-            devMode: false,
-            generatePbiviz: true,
+            devMode: !isProduction,
+            generatePbiviz: isProduction,
             generateResources: isProduction,
             modules: true,
             packageOutPath: path.join(__dirname, "dist"),
@@ -205,6 +279,9 @@ module.exports = {
                 "./.tmp/**/*.*",
                 "./.tmp/**/**/*.*"
             ]
-        })
+        }),
+        new webpack.ProvidePlugin({
+            define: "fakeDefine",
+        }),
     ],
 };
